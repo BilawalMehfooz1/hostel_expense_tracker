@@ -17,6 +17,8 @@ class ExpenseScreen extends StatefulWidget {
 class _ExpenseScreenState extends State<ExpenseScreen> {
   // Expense List where the new expense items will be stored
   List<Expense> _registeredExpenses = [];
+  var _isLoading = true;
+  String? _error;
 
   // To Load Expense Items on the Screen when we open app
   @override
@@ -34,6 +36,11 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
     final response = await http.get(url);
 
+    if (response.statusCode >= 400) {
+      setState(() {
+        _error = 'Failed to fetch data. Please try again later';
+      });
+    }
     final Map<String, dynamic> listData = json.decode(response.body);
 
     final List<Expense> loadedItems = [];
@@ -55,6 +62,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     // For updating UI each time new expense is added
     setState(() {
       _registeredExpenses = loadedItems;
+      _isLoading = false;
     });
   }
 
@@ -108,11 +116,23 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       child: Text('No expense found. Start adding some!'),
     );
 
+    if (_isLoading == true) {
+      mainContent = const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
     // Connected With expense_list file
     if (_registeredExpenses.isNotEmpty) {
       mainContent = ExpenseList(
           expenses: _registeredExpenses, onRemoveExpense: _removeExpense);
     }
+    // Checking if anything goes wrong while sending post request to database
+    if (_error != null) {
+      mainContent = Center(
+        child: Text(_error!),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hostel Expense Tracker'),

@@ -16,6 +16,7 @@ class _NewExpenseState extends State<NewExpense> {
   final _amountController = TextEditingController();
   DateTime? _selectedDate;
   Category _selectedCategory = Category.breakfast;
+  var _isSending = false;
 
   // Displays Date Picker
   void _showDateOverlay() async {
@@ -86,6 +87,9 @@ class _NewExpenseState extends State<NewExpense> {
       _showDialog();
       return;
     }
+    setState(() {
+      _isSending = true;
+    });
     // Sending Post Request to DataBase for saving expense item
     final url = Uri.https(
       'hostel-expense-tracker-default-rtdb.firebaseio.com',
@@ -201,13 +205,21 @@ class _NewExpenseState extends State<NewExpense> {
                       ),
                       const Spacer(),
                       TextButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
+                          onPressed: _isSending
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                },
                           child: const Text('Cancel')),
                       ElevatedButton(
-                          onPressed: _submitExpense,
-                          child: const Text('Save Expense')),
+                          onPressed: _isSending ? null : _submitExpense,
+                          child: _isSending
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(),
+                                )
+                              : const Text('Save Expense')),
                     ],
                   ),
                 ],
