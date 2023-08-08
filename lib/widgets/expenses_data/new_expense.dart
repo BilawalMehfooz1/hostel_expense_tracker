@@ -1,12 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
-
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:http/http.dart' as http;
 import 'package:hostel_expense_tracker/models/expense.dart';
 
 class NewExpense extends StatefulWidget {
-  const NewExpense({super.key, required this.onAddExpense});
-  final void Function(Expense expense) onAddExpense;
+  const NewExpense({super.key});
   @override
   State<NewExpense> createState() => _NewExpenseState();
 }
@@ -32,7 +32,7 @@ class _NewExpenseState extends State<NewExpense> {
     });
   }
 
-  // Displays Error Messages for Input fields While Adding Expense Item
+  // Displays Error Messages if any one Input fields is empty While Adding Expense Item
   void _showDialog() {
     if (Platform.isIOS) {
       showCupertinoDialog(
@@ -49,7 +49,8 @@ class _NewExpenseState extends State<NewExpense> {
             ],
             title: const Text('Invalid Input'),
             content: const Text(
-                'Please make sure a valid title, amount, date and category was entered.'),
+              'Please make sure a valid title, amount, date and category was entered.',
+            ),
           );
         },
       );
@@ -76,7 +77,7 @@ class _NewExpenseState extends State<NewExpense> {
   }
 
   // Submitting Expense Method
-  void _submitExpense() {
+  void _submitExpense() async {
     final enteredAmount = double.tryParse(_amountController.text);
     final amountIsInvalid = enteredAmount == null || enteredAmount <= 0;
     if (_titleController.text.trim().isEmpty ||
@@ -85,15 +86,34 @@ class _NewExpenseState extends State<NewExpense> {
       _showDialog();
       return;
     }
-    widget.onAddExpense(
-      Expense(
-        title: _titleController.text,
-        amount: enteredAmount,
-        category: _selectedCategory,
-        date: _selectedDate!,
-      ),
+    // Sending Post Request to DataBase for saving expense item
+    final url = Uri.https(
+      'hostel-expense-tracker-default-rtdb.firebaseio.com',
+      'expense-list.json',
     );
-    Navigator.pop(context);
+    final response = await http.post(url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'title': _titleController.text,
+          'amount': enteredAmount,
+          'category': _selectedCategory.name,
+          'date': _selectedDate!.toIso8601String(),
+        }));
+
+    final Map<String, dynamic> resData = json.decode(response.body);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    // sends data back to expense screen after submitting expense
+    Navigator.of(context).pop(Expense(
+      id: resData['name'],
+      title: _titleController.text,
+      amount: enteredAmount,
+      category: _selectedCategory,
+      date: _selectedDate!,
+    ));
   }
 
   @override

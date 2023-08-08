@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:hostel_expense_tracker/models/expense.dart';
 import 'package:hostel_expense_tracker/widgets/chart/chart.dart';
 import 'package:hostel_expense_tracker/widgets/expenses_data/expense_list.dart';
@@ -12,34 +15,67 @@ class ExpenseScreen extends StatefulWidget {
 }
 
 class _ExpenseScreenState extends State<ExpenseScreen> {
+  // Expense List where the new expense items will be stored
+  List<Expense> _registeredExpenses = [];
+
+  // To Load Expense Items on the Screen when we open app
+  @override
+  void initState() {
+    super.initState();
+    _loadItems();
+  }
+
+  // Gets Data from the database
+  void _loadItems() async {
+    final url = Uri.https(
+      'hostel-expense-tracker-default-rtdb.firebaseio.com',
+      'expense-list.json',
+    );
+
+    final response = await http.get(url);
+
+    final Map<String, dynamic> listData = json.decode(response.body);
+
+    final List<Expense> loadedItems = [];
+
+    // Converting Map of Expense item to list
+    for (final item in listData.entries) {
+      final category = Category.values.firstWhere(
+        (catItem) => catItem.name == item.value['category'],
+      );
+      loadedItems.add(
+        Expense(
+          title: item.value['title'],
+          amount: item.value['amount'],
+          category: category,
+          date: DateTime.parse(item.value['date']),
+        ),
+      );
+    }
+    // For updating UI each time new expense is added
+    setState(() {
+      _registeredExpenses = loadedItems;
+    });
+  }
+
   // Shows a ModalBottomSheet when we press the add button in AppBar
-  void _showAddExpenseOverlay() {
-    showModalBottomSheet(
+  void _showAddExpenseOverlay() async {
+    final newItem = await showModalBottomSheet(
       useSafeArea: true, //for basice device settings like camera
       isScrollControlled: true,
       context: context,
       builder: (ctx) {
-        return NewExpense(
-            onAddExpense: _addExpenses); //connected with NewExpense file
+        return const NewExpense(); //connected with NewExpense file
       },
     );
-  }
+    if (newItem == null) {
+      return;
+    }
 
-  // Expense List where the new expense items will be stored
-  final List<Expense> _registeredExpenses = [
-    Expense(
-      title: 'Mirpur',
-      amount: 450,
-      category: Category.travel,
-      date: DateTime.now(),
-    ),
-    Expense(
-      title: 'Hostel Rent',
-      amount: 3500,
-      category: Category.rent,
-      date: DateTime.now(),
-    ),
-  ];
+    setState(() {
+      _registeredExpenses.add(newItem);
+    });
+  }
 
   // Remove Expense Method
   void _removeExpense(Expense expense) {
@@ -62,13 +98,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         ),
       ),
     );
-  }
-
-  // Add Expense Method
-  void _addExpenses(Expense expense) {
-    setState(() {
-      _registeredExpenses.add(expense);
-    });
   }
 
   @override
