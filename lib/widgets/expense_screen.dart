@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:hostel_expense_tracker/models/expense.dart';
 import 'package:hostel_expense_tracker/widgets/chart/chart.dart';
 import 'package:hostel_expense_tracker/widgets/expenses_data/expense_list.dart';
@@ -33,37 +34,48 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       'hostel-expense-tracker-default-rtdb.firebaseio.com',
       'expense-list.json',
     );
+    try {
+      final response = await http.get(url);
+      if (response.statusCode >= 400) {
+        setState(() {
+          _error = 'Failed to fetch data. Please try again later';
+        });
+      }
 
-    final response = await http.get(url);
+      if (response.body == 'null'||response.body=='{}') {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+      final Map<String, dynamic> listData = json.decode(response.body);
 
-    if (response.statusCode >= 400) {
+      final List<Expense> loadedItems = [];
+
+      // Converting Map of Expense item to list
+      for (final item in listData.entries) {
+        final category = Category.values.firstWhere(
+          (catItem) => catItem.name == item.value['category'],
+        );
+        loadedItems.add(
+          Expense(
+            title: item.value['title'],
+            amount: item.value['amount'],
+            category: category,
+            date: DateTime.parse(item.value['date']),
+          ),
+        );
+      }
+      // For updating UI each time new expense is added
       setState(() {
-        _error = 'Failed to fetch data. Please try again later';
+        _registeredExpenses = loadedItems;
+        _isLoading = false;
+      });
+    } catch (error) {
+      setState(() {
+        _error = 'Something went wrong! Please try again later.';
       });
     }
-    final Map<String, dynamic> listData = json.decode(response.body);
-
-    final List<Expense> loadedItems = [];
-
-    // Converting Map of Expense item to list
-    for (final item in listData.entries) {
-      final category = Category.values.firstWhere(
-        (catItem) => catItem.name == item.value['category'],
-      );
-      loadedItems.add(
-        Expense(
-          title: item.value['title'],
-          amount: item.value['amount'],
-          category: category,
-          date: DateTime.parse(item.value['date']),
-        ),
-      );
-    }
-    // For updating UI each time new expense is added
-    setState(() {
-      _registeredExpenses = loadedItems;
-      _isLoading = false;
-    });
   }
 
   // Shows a ModalBottomSheet when we press the add button in AppBar
@@ -82,15 +94,18 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
     setState(() {
       _registeredExpenses.add(newItem);
+      _error = null; //resets error when a new item is added
     });
   }
 
   // Remove Expense Method
-  void _removeExpense(Expense expense) {
+  void _removeExpense(Expense expense) async {
     final expenseIndex = _registeredExpenses.indexOf(expense);
+
     setState(() {
       _registeredExpenses.remove(expense);
     });
+
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -98,7 +113,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
           label: 'Undo',
-          onPressed: () {
+          onPressed: () async {
             setState(() {
               _registeredExpenses.insert(expenseIndex, expense);
             });
@@ -106,6 +121,31 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         ),
       ),
     );
+
+    // wait for 3 seconds and then delete the item from the backend
+    await Future.delayed(const Duration(seconds: 3));
+
+    // if the expense is still removed (i.e., user did not press Undo), then delete from backend
+    if (!_registeredExpenses.contains(expense)) {
+      final url = Uri.https(
+        'hostel-expense-tracker-default-rtdb.firebaseio.com',
+        'expense-list/${expense.id}.json',
+      );
+      final response = await http.delete(url);
+
+      if (response.statusCode >= 400) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Deletion failed!'),
+            ),
+          );
+          setState(() {
+            _registeredExpenses.insert(expenseIndex, expense);
+          });
+        }
+      }
+    }
   }
 
   @override

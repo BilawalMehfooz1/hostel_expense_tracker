@@ -106,18 +106,20 @@ class _NewExpenseState extends State<NewExpense> {
 
     final Map<String, dynamic> resData = json.decode(response.body);
 
-    if (!context.mounted) {
-      return;
-    }
+    if (context.mounted) {
+      final newExpense = Expense(
+        id: resData['name'],
+        title: _titleController.text,
+        amount: enteredAmount,
+        category: _selectedCategory,
+        date: _selectedDate!,
+      );
 
-    // sends data back to expense screen after submitting expense
-    Navigator.of(context).pop(Expense(
-      id: resData['name'],
-      title: _titleController.text,
-      amount: enteredAmount,
-      category: _selectedCategory,
-      date: _selectedDate!,
-    ));
+      // sends data back to expense screen after submitting expense
+  
+      Navigator.of(context).pop(newExpense);
+    }
+    return;
   }
 
   @override
